@@ -7,7 +7,7 @@
 #ifndef UTILITYH
 #define UTILITYH
 
-struct timeval start, end;
+struct timeval start, finish_time;
 
 void set_clock()
 {
@@ -16,9 +16,9 @@ void set_clock()
 
 double elapsed_time()
 {
-    gettimeofday(&end, NULL);
-    double elapsed = (end.tv_sec - start.tv_sec); 
-    elapsed += (double)(end.tv_usec - start.tv_usec) / 1000000.0;
+    gettimeofday(&finish_time, NULL);
+    double elapsed = (finish_time.tv_sec - start.tv_sec); 
+    elapsed += (double)(finish_time.tv_usec - start.tv_usec) / 1000000.0;
     return elapsed;
 }
 

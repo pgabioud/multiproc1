@@ -10,6 +10,7 @@ SCIPER      : Your SCIPER number
 #include <iomanip>
 #include <sys/time.h>
 #include <cuda_runtime.h>
+#include <math.h>
 using namespace std;
 
 // CPU Baseline
@@ -46,6 +47,27 @@ void array_process(double *input, double *output, int length, int iterations)
     }
 }
 
+__global__ void GPU_processing(double *input, double *output, int length) {
+    //for(int i = 0; i<iterations; i++) {
+        int x = (blockIdx.x*blockDim.x) + threadIdx.x;
+        int y = (blockIdx.y*blockDim.y) + threadIdx.y;
+        int element_id = (y*length) + x;
+
+        if (x >= length || y >= length || x%(length-1) == 0 || y%(length-1) == 0 ||
+            (x==length/2 - 1 && (y==length/2 || y==length/2-1)) ||
+            (x==length/2 && (y==length/2 || y==length/2-1))) return;
+
+        output[element_id] = (input[(y-1)*(length)+(x-1)] +
+                                            input[(y-1)*(length)+(x)]   +
+                                            input[(y-1)*(length)+(x+1)] +
+                                            input[(y)*(length)+(x-1)]   +
+                                            input[(y)*(length)+(x)]     +
+                                            input[(y)*(length)+(x+1)]   +
+                                            input[(y+1)*(length)+(x-1)] +
+                                            input[(y+1)*(length)+(x)]   +
+                                            input[(y+1)*(length)+(x+1)] ) / 9;
+    //}
+}
 
 // GPU Optimized function
 void GPU_array_process(double *input, double *output, int length, int iterations)
@@ -60,24 +82,53 @@ void GPU_array_process(double *input, double *output, int length, int iterations
     cudaEventCreate(&comp_end);
 
     /* Preprocessing goes here */
+    double* gpu_output;
+    cudaMalloc((void**)&gpu_output, length*length*sizeof(double));
+    double* gpu_input;
+    cudaMalloc((void**)&gpu_input, length*length*sizeof(double));
+    double* temp;
 
     cudaEventRecord(cpy_H2D_start);
+
     /* Copying array from host to device goes here */
+    cudaMemcpy((void*)gpu_input, (void*)input, length*length*sizeof(double), cudaMemcpyHostToDevice);
+    cudaMemcpy((void*)gpu_output, (void*)output, length*length*sizeof(double), cudaMemcpyHostToDevice);
+
     cudaEventRecord(cpy_H2D_end);
     cudaEventSynchronize(cpy_H2D_end);
 
     //Copy array from host to device
     cudaEventRecord(comp_start);
+
     /* GPU calculation goes here */
+    dim3 thrsPerBlock(16,16);               //256 threads par blocks
+    int nbTB = ceil(sqrt(ceil(length*length/256)));
+    dim3 nBlks(nbTB, nbTB);
+
+    for(int i = 0; i < iterations; i++) {
+        GPU_processing<<< nBlks, thrsPerBlock>>>(gpu_input, gpu_output, length);
+        cudaThreadSynchronize();
+        temp = gpu_input;
+        gpu_input = gpu_output;
+        gpu_output = temp;
+    }
+
+
     cudaEventRecord(comp_end);
     cudaEventSynchronize(comp_end);
 
     cudaEventRecord(cpy_D2H_start);
+
     /* Copying array from device to host goes here */
+    cudaMemcpy((void*)output, (void*)gpu_input, length*length*sizeof(double), cudaMemcpyDeviceToHost);
+
     cudaEventRecord(cpy_D2H_end);
     cudaEventSynchronize(cpy_D2H_end);
 
     /* Postprocessing goes here */
+    free(gpu_input);
+    free(gpu_output);
+
 
     float time;
     cudaEventElapsedTime(&time, cpy_H2D_start, cpy_H2D_end);
