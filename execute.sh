@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --workdir /home/your_user_name
+#SBATCH --workdir /home/jrossett
 #SBATCH --partition=gpu
 #SBATCH --qos=gpu_free
 #SBATCH --gres=gpu:1
@@ -10,8 +10,8 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
 
-length=1000
-iterations=10
+length=100
+iterations=5
 
 module load gcc cuda
 

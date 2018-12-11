@@ -101,10 +101,11 @@ void GPU_array_process(double *input, double *output, int length, int iterations
     cudaEventRecord(comp_start);
 
     /* GPU calculation goes here */
-    dim3 thrsPerBlock(16,16);               //256 threads par blocks
+    dim3 thrsPerBlock(16,16);//256 threads par blocks
     int nbTB = ceil(sqrt(ceil(length*length/256)));
     dim3 nBlks(nbTB, nbTB);
-
+	
+	
     for(int i = 0; i < iterations; i++) {
         GPU_processing<<< nBlks, thrsPerBlock>>>(gpu_input, gpu_output, length);
         cudaThreadSynchronize();
@@ -126,8 +127,8 @@ void GPU_array_process(double *input, double *output, int length, int iterations
     cudaEventSynchronize(cpy_D2H_end);
 
     /* Postprocessing goes here */
-    free(gpu_input);
-    free(gpu_output);
+    cudaFree(gpu_input);
+    cudaFree(gpu_output);
 
 
     float time;
