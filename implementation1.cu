@@ -1,8 +1,8 @@
 /*
 ============================================================================
 Filename    : algorithm.c
-Author      : Your name goes here
-SCIPER      : Your SCIPER number
+Author      : Gabioud Pierre, Jérémie Rossetti
+SCIPER      : 247 216, 270 015
 ============================================================================
 */
 
@@ -47,8 +47,7 @@ void array_process(double *input, double *output, int length, int iterations)
     }
 }
 
-__global__ void GPU_processing(double *input, double *output, int length) {
-    //for(int i = 0; i<iterations; i++) {
+__global__ void GPU_processing(double *input, double *output, int length, int iterations) {
         int x = (blockIdx.x*blockDim.x) + threadIdx.x;
         int y = (blockIdx.y*blockDim.y) + threadIdx.y;
         int element_id = (y*length) + x;
@@ -57,6 +56,8 @@ __global__ void GPU_processing(double *input, double *output, int length) {
             (x==length/2 - 1 && (y==length/2 || y==length/2-1)) ||
             (x==length/2 && (y==length/2 || y==length/2-1))) return;
 
+        for(int i = 0; i<iterations; i++) {
+        if(i % 2 == 0) {
         output[element_id] = (input[(y-1)*(length)+(x-1)] +
                                             input[(y-1)*(length)+(x)]   +
                                             input[(y-1)*(length)+(x+1)] +
@@ -66,7 +67,19 @@ __global__ void GPU_processing(double *input, double *output, int length) {
                                             input[(y+1)*(length)+(x-1)] +
                                             input[(y+1)*(length)+(x)]   +
                                             input[(y+1)*(length)+(x+1)] ) / 9;
-    //}
+        } else {
+        input[element_id] = (output[(y-1)*(length)+(x-1)] +
+                                            output[(y-1)*(length)+(x)]   +
+                                            output[(y-1)*(length)+(x+1)] +
+                                            output[(y)*(length)+(x-1)]   +
+                                            output[(y)*(length)+(x)]     +
+                                            output[(y)*(length)+(x+1)]   +
+                                            output[(y+1)*(length)+(x-1)] +
+                                            output[(y+1)*(length)+(x)]   +
+                                            output[(y+1)*(length)+(x+1)] ) / 9;
+        }
+    }
+    __syncthreads();
 }
 
 // GPU Optimized function
@@ -86,7 +99,7 @@ void GPU_array_process(double *input, double *output, int length, int iterations
     cudaMalloc((void**)&gpu_output, length*length*sizeof(double));
     double* gpu_input;
     cudaMalloc((void**)&gpu_input, length*length*sizeof(double));
-    double* temp;
+    //double* temp;
 
     cudaEventRecord(cpy_H2D_start);
 
@@ -104,15 +117,15 @@ void GPU_array_process(double *input, double *output, int length, int iterations
     dim3 thrsPerBlock(16,16);//256 threads par blocks
     int nbTB = ceil(sqrt(ceil(length*length/256)));
     dim3 nBlks(nbTB, nbTB);
-	
-	
-    for(int i = 0; i < iterations; i++) {
-        GPU_processing<<< nBlks, thrsPerBlock>>>(gpu_input, gpu_output, length);
-        cudaThreadSynchronize();
-        temp = gpu_input;
-        gpu_input = gpu_output;
-        gpu_output = temp;
-    }
+
+
+    //for(int i = 0; i < iterations; i++) {
+        GPU_processing<<< nBlks, thrsPerBlock>>>(gpu_input, gpu_output, length, iterations);
+    //    cudaThreadSynchronize();
+    //    temp = gpu_input;
+    //    gpu_input = gpu_output;
+    //    gpu_output = temp;
+    //}
 
 
     cudaEventRecord(comp_end);
@@ -121,7 +134,11 @@ void GPU_array_process(double *input, double *output, int length, int iterations
     cudaEventRecord(cpy_D2H_start);
 
     /* Copying array from device to host goes here */
-    cudaMemcpy((void*)output, (void*)gpu_input, length*length*sizeof(double), cudaMemcpyDeviceToHost);
+    if(iterations%2 == 0) {
+        cudaMemcpy((void*)output, (void*)gpu_input, length*length*sizeof(double), cudaMemcpyDeviceToHost);
+    } else {
+        cudaMemcpy((void*)input, (void*)gpu_output, length*length*sizeof(double), cudaMemcpyDeviceToHost);
+    }
 
     cudaEventRecord(cpy_D2H_end);
     cudaEventSynchronize(cpy_D2H_end);
